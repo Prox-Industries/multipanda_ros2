@@ -123,14 +123,6 @@ def generate_launch_description():
             parameters=[{'robot_description': robot_description}],
         ),
         Node(
-            package='joint_state_publisher',
-            executable='joint_state_publisher',
-            name='joint_state_publisher',
-            parameters=[
-                {'source_list': ['franka/joint_states'],
-                 'rate': 30}],
-        ),
-        Node(
             package='franka_control2',
             executable='franka_control2_node',
             parameters=[{'robot_description': robot_description}, controllers_file],
