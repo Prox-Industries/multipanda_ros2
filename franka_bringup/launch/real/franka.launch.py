@@ -119,13 +119,13 @@ def generate_launch_description():
         Node(
             package='controller_manager',
             executable='spawner',
-            arguments=['joint_state_broadcaster'],
+            arguments=['joint_state_broadcaster', '--param-file', controllers_file],
             output='screen',
         ),
         Node(
             package='controller_manager',
             executable='spawner',
-            arguments=['franka_robot_state_broadcaster'],
+            arguments=['franka_robot_state_broadcaster', '--param-file', controllers_file],
             output='screen',
             condition=UnlessCondition(use_fake_hardware),
         ),
