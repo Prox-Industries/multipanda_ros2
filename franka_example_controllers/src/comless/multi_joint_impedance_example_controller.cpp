@@ -76,30 +76,34 @@ controller_interface::return_type MultiJointImpedanceExampleController::update(
 }
 
 CallbackReturn MultiJointImpedanceExampleController::on_init() {
-  try {
-    rclcpp::Parameter arm_count;
-    bool bHas_arm_count = get_node()->get_parameter("arm_count", arm_count);
-    //num_robots = get_node()->get_parameter("arm_count").as_int();
-    if(!bHas_arm_count){
-      fprintf(stderr, "Failed to get arm_count parameter. Make sure it's set in the yaml file.\n");
-      return CallbackReturn::ERROR;
-    }
-    num_robots = arm_count.as_int();
-
-  } catch (const std::exception& e) {
-    fprintf(stderr, "Failed to get arm_count parameter. Make sure it's set in the yaml file.\n%s \n", e.what());
-    return CallbackReturn::ERROR;
-  }
-  RCLCPP_INFO(get_node()->get_logger(), "Finished initializing multi joint impedance example controller for %d arms", num_robots);
+  auto_declare<int>("arm_count", 0);
+  RCLCPP_INFO(get_node()->get_logger(), "Finished initializing multi joint impedance example controller");
   return CallbackReturn::SUCCESS;
 }
 
 CallbackReturn MultiJointImpedanceExampleController::on_configure(
     const rclcpp_lifecycle::State& /*previous_state*/) {
+  try {
+    num_robots = this->get_node()->get_parameter("arm_count").as_int();
+  } catch (const std::exception& e) {
+    fprintf(stderr, "Failed to get arm_count parameter. Make sure it's set in the yaml file.\n%s \n", e.what());
+    return CallbackReturn::ERROR;
+  }
+  if (num_robots <= 0) {
+    RCLCPP_FATAL(get_node()->get_logger(), "arm_count parameter not set");
+    return CallbackReturn::ERROR;
+  }
   
   for(int i = 1; i <= num_robots; i++){
     std::string arm_id_param_name = "arm_" + std::to_string(i) + ".arm_id";
+    if (!this->get_node()->has_parameter(arm_id_param_name)) {
+      auto_declare<std::string>(arm_id_param_name, "");
+    }
     rclcpp::Parameter arm_id_param = this->get_node()->get_parameter(arm_id_param_name);
+    if (arm_id_param.as_string().empty()) {
+      RCLCPP_FATAL(get_node()->get_logger(), "%s parameter not set", arm_id_param_name.c_str());
+      return CallbackReturn::ERROR;
+    }
     arms_.insert(std::make_pair(arm_id_param.as_string(), ArmContainer()));
   }
   
@@ -107,8 +111,16 @@ CallbackReturn MultiJointImpedanceExampleController::on_configure(
   for(auto& arm_container_pair : arms_){
     auto &arm = arm_container_pair.second;
     arm.arm_id_ = arm_container_pair.first;
-    auto k_gains = get_node()->get_parameter("arm_" + std::to_string(i) + ".k_gains").as_double_array();
-    auto d_gains = get_node()->get_parameter("arm_" + std::to_string(i) + ".d_gains").as_double_array();
+    const std::string k_gains_param_name = "arm_" + std::to_string(i) + ".k_gains";
+    const std::string d_gains_param_name = "arm_" + std::to_string(i) + ".d_gains";
+    if (!this->get_node()->has_parameter(k_gains_param_name)) {
+      auto_declare<std::vector<double>>(k_gains_param_name, {});
+    }
+    if (!this->get_node()->has_parameter(d_gains_param_name)) {
+      auto_declare<std::vector<double>>(d_gains_param_name, {});
+    }
+    auto k_gains = get_node()->get_parameter(k_gains_param_name).as_double_array();
+    auto d_gains = get_node()->get_parameter(d_gains_param_name).as_double_array();
 
     if (k_gains.empty()) {
       RCLCPP_FATAL(get_node()->get_logger(), "k_gains parameter not set");

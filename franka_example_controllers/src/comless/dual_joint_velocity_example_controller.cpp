@@ -65,7 +65,7 @@ controller_interface::return_type DualJointVelocityExampleController::update(
         command_interfaces_[k].set_value(omega);
       }
       else{
-        command_interfaces_[k].set_value(0);
+        command_interfaces_[k].set_value(0.0);
       }
       k++; // BIG assumption: That the command interfaces are always in the same order
     }

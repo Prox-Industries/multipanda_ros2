@@ -34,10 +34,12 @@ def generate_launch_description():
     arm_id_param = 'arm_id'
     initial_positions_param = 'initial_positions'
     use_rviz_param = 'use_rviz'
+    unpause_param = 'unpause'
     
     arm_id = LaunchConfiguration(arm_id_param)
     initial_positions = LaunchConfiguration(initial_positions_param)
     use_rviz = LaunchConfiguration(use_rviz_param)
+    unpause = LaunchConfiguration(unpause_param)
 
     # Fixed variables
     load_gripper = True # We make gripper a fixed variable, mainly because parsing the argument 
@@ -101,6 +103,10 @@ def generate_launch_description():
             default_value='false',
             description='Visualize the robot in Rviz'),
         DeclareLaunchArgument(
+            unpause_param,
+            default_value='true',
+            description='Start the MuJoCo simulation unpaused so controller activation can complete.'),
+        DeclareLaunchArgument(
             arm_id_param,
             default_value='panda',
             description='The name of the robot. Defaults to panda.'),
@@ -118,6 +124,7 @@ def generate_launch_description():
                 'modelfile': xml_file,
                 'verbose': "true",
                 'ns': ns,
+                'unpause': unpause,
                 'mujoco_plugin_config': mjros_config_file
                 # 'mujoco_plugin_config': os.path.join(mjr2_control_path, 'example', 'ros2_control_plugins_example.yaml')
 
