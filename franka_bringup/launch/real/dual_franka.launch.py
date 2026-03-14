@@ -28,12 +28,13 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     robot_ip_1_parameter_name = 'robot_ip_1'
     robot_ip_2_parameter_name = 'robot_ip_2'
-    
+
     load_gripper_1_parameter_name = 'load_gripper_1'
     load_gripper_2_parameter_name = 'load_gripper_2'
 
     arm_id_1_parameter_name = 'arm_id_1'
     arm_id_2_parameter_name = 'arm_id_2'
+    controllers_file_parameter_name = 'controllers_file'
     use_fake_hardware_parameter_name = 'use_fake_hardware'
     fake_sensor_commands_parameter_name = 'fake_sensor_commands'
     use_rviz_parameter_name = 'use_rviz'
@@ -43,10 +44,11 @@ def generate_launch_description():
 
     arm_id_1 = LaunchConfiguration(arm_id_1_parameter_name)
     arm_id_2 = LaunchConfiguration(arm_id_2_parameter_name)
+    controllers_file = LaunchConfiguration(controllers_file_parameter_name)
 
     load_gripper_1 = LaunchConfiguration(load_gripper_1_parameter_name)
     load_gripper_2 = LaunchConfiguration(load_gripper_2_parameter_name)
-    
+
     use_fake_hardware = LaunchConfiguration(use_fake_hardware_parameter_name)
     fake_sensor_commands = LaunchConfiguration(fake_sensor_commands_parameter_name)
     use_rviz = LaunchConfiguration(use_rviz_parameter_name)
@@ -64,14 +66,6 @@ def generate_launch_description():
     rviz_file = os.path.join(get_package_share_directory('franka_description'), 'rviz',
                              'visualize_dual_franka.rviz')
 
-    franka_controllers = PathJoinSubstitution(
-        [
-            FindPackageShare('franka_bringup'),
-            'config', 'real',
-            'dual_controllers.yaml',
-        ]
-    )
-
     return LaunchDescription([
         DeclareLaunchArgument(
             robot_ip_1_parameter_name,
@@ -81,13 +75,26 @@ def generate_launch_description():
             description='Hostname or IP address of robot 2.'),
         DeclareLaunchArgument(
             arm_id_1_parameter_name,
+            default_value='left',
             description='Unique arm ID of robot 1.'),
         DeclareLaunchArgument(
             arm_id_2_parameter_name,
+            default_value='right',
             description='Unique arm ID of robot 2.'),
         DeclareLaunchArgument(
+            controllers_file_parameter_name,
+            default_value=PathJoinSubstitution(
+                [
+                    FindPackageShare('franka_bringup'),
+                    'config',
+                    'real',
+                    'dual_controllers.yaml',
+                ]
+            ),
+            description='Controller manager parameter file.'),
+        DeclareLaunchArgument(
             use_rviz_parameter_name,
-            default_value='true',
+            default_value='false',
             description='Visualize the robot in Rviz'),
         DeclareLaunchArgument(
             use_fake_hardware_parameter_name,
@@ -120,13 +127,13 @@ def generate_launch_description():
             executable='joint_state_publisher',
             name='joint_state_publisher',
             parameters=[
-                {'source_list': ['franka/joint_states', 'panda_gripper/joint_states'],
+                {'source_list': ['franka/joint_states'],
                  'rate': 30}],
         ),
         Node(
-            package='controller_manager',
-            executable='ros2_control_node',
-            parameters=[{'robot_description': robot_description}, franka_controllers],
+            package='franka_control2',
+            executable='franka_control2_node',
+            parameters=[{'robot_description': robot_description}, controllers_file],
             remappings=[('joint_states', 'franka/joint_states')],
             output={
                 'stdout': 'screen',
@@ -137,55 +144,23 @@ def generate_launch_description():
         Node(
             package='controller_manager',
             executable='spawner',
-            arguments=['joint_state_broadcaster'],
+            arguments=['joint_state_broadcaster', '--param-file', controllers_file],
             output='screen',
         ),
         Node(
             package='controller_manager',
             executable='spawner',
-            arguments=['franka_left_robot_state_broadcaster'],
+            arguments=['franka_left_robot_state_broadcaster', '--param-file', controllers_file],
             output='screen',
             condition=UnlessCondition(use_fake_hardware),
         ),
         Node(
             package='controller_manager',
             executable='spawner',
-            arguments=['franka_right_robot_state_broadcaster'],
+            arguments=['franka_right_robot_state_broadcaster', '--param-file', controllers_file],
             output='screen',
             condition=UnlessCondition(use_fake_hardware),
         ),
-        Node(
-            package='controller_manager',
-            executable='spawner',
-            arguments=['left_robot_state_broadcaster'],
-            output='screen',
-        ),
-        Node(
-            package='controller_manager',
-            executable='spawner',
-            arguments=['right_robot_state_broadcaster'],
-            output='screen',
-        ),
-        Node(
-            package='controller_manager',
-            executable='spawner',
-            arguments=['left_robot_model_broadcaster'],
-            output='screen',
-        ),
-        Node(
-            package='controller_manager',
-            executable='spawner',
-            arguments=['right_robot_model_broadcaster'],
-            output='screen',
-        ),
-        # IncludeLaunchDescription(
-        #     PythonLaunchDescriptionSource([PathJoinSubstitution(
-        #         [FindPackageShare('franka_gripper'), 'launch', 'gripper.launch.py'])]),
-        #     launch_arguments={robot_ip_1_parameter_name: robot_ip_1,
-        #                       use_fake_hardware_parameter_name: use_fake_hardware}.items(),
-        #     condition=IfCondition(load_gripper_1)
-
-        # ),
 
         Node(package='rviz2',
              executable='rviz2',
