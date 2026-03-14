@@ -31,36 +31,47 @@ def generate_launch_description():
     use_fake_hardware_parameter_name = 'use_fake_hardware'
     fake_sensor_commands_parameter_name = 'fake_sensor_commands'
     use_rviz_parameter_name = 'use_rviz'
+    arm_id_parameter_name = 'arm_id'
+    controllers_file_parameter_name = 'controllers_file'
 
     robot_ip = LaunchConfiguration(robot_ip_parameter_name)
     load_gripper = LaunchConfiguration(load_gripper_parameter_name)
     use_fake_hardware = LaunchConfiguration(use_fake_hardware_parameter_name)
     fake_sensor_commands = LaunchConfiguration(fake_sensor_commands_parameter_name)
     use_rviz = LaunchConfiguration(use_rviz_parameter_name)
+    arm_id = LaunchConfiguration(arm_id_parameter_name)
+    controllers_file = LaunchConfiguration(controllers_file_parameter_name)
 
     franka_xacro_file = os.path.join(get_package_share_directory('franka_description'), 'robots', 'real',
                                      'panda_arm.urdf.xacro')
     robot_description = Command(
         [FindExecutable(name='xacro'), ' ', franka_xacro_file, ' hand:=', load_gripper,
+         ' arm_id:=', arm_id,
          ' robot_ip:=', robot_ip, ' use_fake_hardware:=', use_fake_hardware,
          ' fake_sensor_commands:=', fake_sensor_commands])
 
     rviz_file = os.path.join(get_package_share_directory('franka_description'), 'rviz',
                              'visualize_franka.rviz')
 
-    franka_controllers = PathJoinSubstitution(
-        [
-            FindPackageShare('franka_bringup'),
-            'config',
-            'real',
-            'single_controllers.yaml',
-        ]
-    )
-
     return LaunchDescription([
         DeclareLaunchArgument(
             robot_ip_parameter_name,
             description='Hostname or IP address of the robot.'),
+        DeclareLaunchArgument(
+            arm_id_parameter_name,
+            default_value='panda',
+            description='Arm identifier used in joint and link names.'),
+        DeclareLaunchArgument(
+            controllers_file_parameter_name,
+            default_value=PathJoinSubstitution(
+                [
+                    FindPackageShare('franka_bringup'),
+                    'config',
+                    'real',
+                    'single_controllers.yaml',
+                ]
+            ),
+            description='Controller manager parameter file.'),
         DeclareLaunchArgument(
             use_rviz_parameter_name,
             default_value='false',
@@ -91,13 +102,13 @@ def generate_launch_description():
             executable='joint_state_publisher',
             name='joint_state_publisher',
             parameters=[
-                {'source_list': ['franka/joint_states', 'panda_gripper/joint_states'],
+                {'source_list': ['franka/joint_states', [arm_id, '_gripper/joint_states']],
                  'rate': 30}],
         ),
         Node(
             package='franka_control2',
             executable='franka_control2_node',
-            parameters=[{'robot_description': robot_description}, franka_controllers],
+            parameters=[{'robot_description': robot_description}, controllers_file],
             remappings=[('joint_states', 'franka/joint_states')],
             output={
                 'stdout': 'screen',
@@ -122,6 +133,7 @@ def generate_launch_description():
             PythonLaunchDescriptionSource([PathJoinSubstitution(
                 [FindPackageShare('franka_gripper'), 'launch', 'gripper.launch.py'])]),
             launch_arguments={robot_ip_parameter_name: robot_ip,
+                              arm_id_parameter_name: arm_id,
                               use_fake_hardware_parameter_name: use_fake_hardware}.items(),
             condition=IfCondition(load_gripper)
 
