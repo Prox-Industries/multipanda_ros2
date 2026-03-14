@@ -67,6 +67,11 @@ void FrankaErrorRecoveryServiceServer::triggerAutomaticRecovery(const franka_msg
             response->error = e.what();
             response->success = false;
         }
+        catch(franka::CommandException& e){
+            RCLCPP_ERROR(this->get_logger(), "Error recovery rejected: %s", e.what());
+            response->error = e.what();
+            response->success = false;
+        }
         catch(franka::NetworkException& e){
             RCLCPP_ERROR(this->get_logger(), "Error recovery timed out. :%s", e.what());
             response->error = e.what();

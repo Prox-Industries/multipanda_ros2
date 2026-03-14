@@ -40,7 +40,6 @@ Robot::Robot(const std::string& robot_ip, const rclcpp::Logger& logger) {
   }
   try{
     robot_ = std::make_unique<franka::Robot>(robot_ip, rt_config);
-    setDefaultParams();
   }
   catch(franka::ControlException& e){
     RCLCPP_ERROR(logger, "Robot is in control error state! Please trigger automatic recovery first.");
@@ -65,6 +64,15 @@ Robot::Robot(const std::string& robot_ip, const rclcpp::Logger& logger) {
   cartesian_velocity_command_.fill({});
   model_ = std::make_unique<franka::Model>(robot_->loadModel());
   franka_hardware_model_ = std::make_unique<ModelFranka>(model_.get());
+
+  try {
+    setDefaultParams();
+  } catch (const franka::CommandException& e) {
+    RCLCPP_WARN(
+        logger,
+        "Skipping default Franka parameter setup during connect: %s",
+        e.what());
+  }
 }
 
 Robot::~Robot() {
@@ -86,12 +94,14 @@ void Robot::write(const std::array<double, 7>& efforts,
 
 franka::RobotState Robot::read() {
   std::lock_guard<std::mutex> lock(read_mutex_);
+  if (hasError() && !isStopped()) {
+    // A read/control loop can exit on error without clearing stopped_. Stop the
+    // libfranka operation explicitly before falling back to readOnce().
+    stopRobot();
+  }
   if(hasError() || isStopped()){ // either the robot is in error, or it doesn't have an active control/read loop running
     try{
       current_state_ = robot_->readOnce();
-      if(hasError()){
-        stopRobot();
-      }
     }
     catch(franka::InvalidOperationException& e){
       std::cout << "Invalid Operation Exception: " << e.what() << std::endl;
@@ -106,7 +116,9 @@ franka_hardware::ModelFranka* Robot::getModel() {
 void Robot::stopRobot() {
   if (!stopped_) {
     finish_ = true;
-    control_thread_->join();
+    if (control_thread_ && control_thread_->joinable()) {
+      control_thread_->join();
+    }
     robot_->stop();
     finish_ = false;
     stopped_ = true;

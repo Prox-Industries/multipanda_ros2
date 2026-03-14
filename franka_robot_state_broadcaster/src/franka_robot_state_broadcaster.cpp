@@ -104,7 +104,8 @@ controller_interface::return_type FrankaRobotStateBroadcaster::update(
     return controller_interface::return_type::OK;
 
   } else {
-    return controller_interface::return_type::ERROR;
+    // Skip this cycle if the realtime publisher is busy instead of deactivating the controller.
+    return controller_interface::return_type::OK;
   }
 }
 
