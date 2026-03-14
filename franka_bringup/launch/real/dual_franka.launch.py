@@ -153,6 +153,26 @@ def generate_launch_description():
             output='screen',
             condition=UnlessCondition(use_fake_hardware),
         ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([PathJoinSubstitution(
+                [FindPackageShare('franka_gripper'), 'launch', 'gripper.launch.py'])]),
+            launch_arguments={
+                'robot_ip': robot_ip_1,
+                'arm_id': arm_id_1,
+                'use_fake_hardware': use_fake_hardware,
+            }.items(),
+            condition=IfCondition(load_gripper_1)
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([PathJoinSubstitution(
+                [FindPackageShare('franka_gripper'), 'launch', 'gripper.launch.py'])]),
+            launch_arguments={
+                'robot_ip': robot_ip_2,
+                'arm_id': arm_id_2,
+                'use_fake_hardware': use_fake_hardware,
+            }.items(),
+            condition=IfCondition(load_gripper_2)
+        ),
 
         Node(package='rviz2',
              executable='rviz2',
