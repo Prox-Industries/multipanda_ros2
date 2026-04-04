@@ -96,6 +96,7 @@ def generate_launch_description():
             name='robot_state_publisher',
             output='screen',
             parameters=[{'robot_description': robot_description}],
+            remappings=[('joint_states', 'franka/combined_joint_states')],
         ),
         Node(
             package='joint_state_publisher',
@@ -104,6 +105,7 @@ def generate_launch_description():
             parameters=[
                 {'source_list': ['franka/joint_states', [arm_id, '_gripper/joint_states']],
                  'rate': 30}],
+            remappings=[('joint_states', 'franka/combined_joint_states')],
         ),
         Node(
             package='franka_control2',
