@@ -14,23 +14,24 @@
 
 
 import os
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, Shutdown
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, OpaqueFunction, Shutdown
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
+REPO_ROOT = Path(__file__).resolve().parents[4]
+
+
 def _state_publisher_nodes(context, robot_description, arm_id, load_gripper):
     arm_id_value = arm_id.perform(context)
     load_gripper_value = load_gripper.perform(context) == 'true'
-    source_list = ['franka/joint_states']
-    if load_gripper_value:
-        source_list.append(f'{arm_id_value}_gripper/joint_states')
-    return [
+    nodes = [
         Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
@@ -39,14 +40,41 @@ def _state_publisher_nodes(context, robot_description, arm_id, load_gripper):
             parameters=[{'robot_description': robot_description}],
             remappings=[('joint_states', 'franka/combined_joint_states')],
         ),
-        Node(
-            package='joint_state_publisher',
-            executable='joint_state_publisher',
-            name='joint_state_publisher',
-            parameters=[{'source_list': source_list, 'rate': 30}],
-            remappings=[('joint_states', 'franka/combined_joint_states')],
-        ),
     ]
+    if load_gripper_value:
+        nodes.append(
+            Node(
+                package='joint_state_publisher',
+                executable='joint_state_publisher',
+                name='joint_state_publisher',
+                parameters=[
+                    {
+                        'source_list': ['franka/joint_states', f'{arm_id_value}_gripper/joint_states'],
+                        'rate': 30,
+                    }
+                ],
+                remappings=[('joint_states', 'franka/combined_joint_states')],
+            )
+        )
+    else:
+        nodes.append(
+            ExecuteProcess(
+                cmd=[
+                    'python3',
+                    str(REPO_ROOT / 'scripts' / 'franka_state_to_joint_state.py'),
+                    '--node-name',
+                    f'{arm_id_value}_franka_state_to_joint_state',
+                    '--arm-id',
+                    arm_id_value,
+                    '--input-topic',
+                    '/franka_robot_state_broadcaster/robot_state',
+                    '--output-topic',
+                    '/franka/combined_joint_states',
+                ],
+                output='screen',
+            )
+        )
+    return nodes
 
 
 def generate_launch_description():
@@ -131,6 +159,7 @@ def generate_launch_description():
             executable='spawner',
             arguments=['joint_state_broadcaster', '--param-file', controllers_file],
             output='screen',
+            condition=IfCondition(load_gripper),
         ),
         Node(
             package='controller_manager',
