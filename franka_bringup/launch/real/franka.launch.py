@@ -20,7 +20,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Shutdown
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -41,6 +41,15 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration(use_rviz_parameter_name)
     arm_id = LaunchConfiguration(arm_id_parameter_name)
     controllers_file = LaunchConfiguration(controllers_file_parameter_name)
+    joint_state_sources = PythonExpression(
+        [
+            "['franka/joint_states'] + ([str(",
+            arm_id,
+            ") + '_gripper/joint_states'] if str(",
+            load_gripper,
+            ") == 'true' else [])",
+        ]
+    )
 
     franka_xacro_file = os.path.join(get_package_share_directory('franka_description'), 'robots', 'real',
                                      'panda_arm.urdf.xacro')
@@ -103,7 +112,7 @@ def generate_launch_description():
             executable='joint_state_publisher',
             name='joint_state_publisher',
             parameters=[
-                {'source_list': ['franka/joint_states', [arm_id, '_gripper/joint_states']],
+                {'source_list': joint_state_sources,
                  'rate': 30}],
             remappings=[('joint_states', 'franka/combined_joint_states')],
         ),
