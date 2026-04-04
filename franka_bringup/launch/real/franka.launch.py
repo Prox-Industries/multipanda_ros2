@@ -17,12 +17,36 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Shutdown
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, Shutdown
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+
+def _state_publisher_nodes(context, robot_description, arm_id, load_gripper):
+    arm_id_value = arm_id.perform(context)
+    load_gripper_value = load_gripper.perform(context) == 'true'
+    source_list = ['franka/joint_states']
+    if load_gripper_value:
+        source_list.append(f'{arm_id_value}_gripper/joint_states')
+    return [
+        Node(
+            package='robot_state_publisher',
+            executable='robot_state_publisher',
+            name='robot_state_publisher',
+            output='screen',
+            parameters=[{'robot_description': robot_description}],
+            remappings=[('joint_states', 'franka/combined_joint_states')],
+        ),
+        Node(
+            package='joint_state_publisher',
+            executable='joint_state_publisher',
+            name='joint_state_publisher',
+            parameters=[{'source_list': source_list, 'rate': 30}],
+            remappings=[('joint_states', 'franka/combined_joint_states')],
+        ),
+    ]
 
 
 def generate_launch_description():
@@ -41,15 +65,6 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration(use_rviz_parameter_name)
     arm_id = LaunchConfiguration(arm_id_parameter_name)
     controllers_file = LaunchConfiguration(controllers_file_parameter_name)
-    joint_state_sources = PythonExpression(
-        [
-            "['franka/joint_states'] + ([str(",
-            arm_id,
-            ") + '_gripper/joint_states'] if str(",
-            load_gripper,
-            ") == 'true' else [])",
-        ]
-    )
 
     franka_xacro_file = os.path.join(get_package_share_directory('franka_description'), 'robots', 'real',
                                      'panda_arm.urdf.xacro')
@@ -99,23 +114,7 @@ def generate_launch_description():
             default_value='false',
             description='Use Franka Gripper as an end-effector, otherwise, the robot is loaded '
                         'without an end-effector.'),
-        Node(
-            package='robot_state_publisher',
-            executable='robot_state_publisher',
-            name='robot_state_publisher',
-            output='screen',
-            parameters=[{'robot_description': robot_description}],
-            remappings=[('joint_states', 'franka/combined_joint_states')],
-        ),
-        Node(
-            package='joint_state_publisher',
-            executable='joint_state_publisher',
-            name='joint_state_publisher',
-            parameters=[
-                {'source_list': joint_state_sources,
-                 'rate': 30}],
-            remappings=[('joint_states', 'franka/combined_joint_states')],
-        ),
+        OpaqueFunction(function=lambda context: _state_publisher_nodes(context, robot_description, arm_id, load_gripper)),
         Node(
             package='franka_control2',
             executable='franka_control2_node',
